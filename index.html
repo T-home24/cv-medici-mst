@@ -274,7 +274,7 @@ const BORDO = [214,217,222];
 
 
 // ---------- Dynamic blocks: corsi fissi ----------
-const CORSI_FISSI = ["SET","ALS / ACLS","PTC / PHTC","Interpretazione ECG avanzata","Gestione delle maxiemergenze","Gestione avanzata delle vie aeree"];
+const CORSI_FISSI = ["SET","ALS / ACLS","PTC Avanzato / ITLS / PHTLS","Interpretazione ECG","Gestione delle maxiemergenze","Gestione avanzata delle vie aeree"];
 function renderCorsi(){
   const wrap = document.getElementById('corsiWrap');
   wrap.innerHTML = CORSI_FISSI.map((c,i)=>`
@@ -329,7 +329,8 @@ function addEsperienza(){
     </div>
     <label style="display:block;margin:8px 0 4px;">Tipologia di attività</label>
     <div class="checkrow">
-      <label><input type="checkbox" id="exp_ps_${id}"> Pronto Soccorso</label>
+      <label><input type="checkbox" id="exp_psmin_${id}"> PS codici minori</label>
+      <label><input type="checkbox" id="exp_psmag_${id}"> PS codici maggiori</label>
       <label><input type="checkbox" id="exp_terr_${id}"> Emergenza territoriale</label>
       <label><input type="checkbox" id="exp_cont_${id}"> Continuità assistenziale</label>
       <label><input type="checkbox" id="exp_rep_${id}"> Reparto ospedaliero</label>
@@ -397,7 +398,8 @@ function collectData(){
     const struttura = v('exp_struttura_'+id);
     if(!struttura) return;
     const tipi = [];
-    if(chk('exp_ps_'+id)) tipi.push('Pronto Soccorso');
+    if(chk('exp_psmin_'+id)) tipi.push('PS codici minori');
+    if(chk('exp_psmag_'+id)) tipi.push('PS codici maggiori');
     if(chk('exp_terr_'+id)) tipi.push('Emergenza territoriale');
     if(chk('exp_cont_'+id)) tipi.push('Continuità assistenziale');
     if(chk('exp_rep_'+id)) tipi.push('Reparto ospedaliero');
@@ -645,29 +647,32 @@ document.getElementById('submitBtn').addEventListener('click', async function(e)
     const pdfDoc = buildPdf(data);
     const fileName = `CV_${data.cognome}_${data.nome}.pdf`.replace(/\s+/g,'_');
     const blob = pdfDoc.output('blob');
-    const file = new File([blob], fileName, { type: 'application/pdf' });
 
-    // 1) Mobile con condivisione file nativa (iOS/Android moderni): apre il pannello "Condividi"
-    //    da cui il medico può salvare in File o inviare direttamente via email/WhatsApp.
-    if(navigator.canShare && navigator.canShare({ files: [file] })){
-      try{
-        await navigator.share({ files: [file], title: fileName });
-        msg.textContent = 'PDF pronto: salvalo o invialo a MST Group dal menu di condivisione.';
-        msg.className = 'msg ok';
-        return;
-      }catch(shareErr){
-        // L'utente ha annullato la condivisione: non è un errore, esci in silenzio
-        if(shareErr && shareErr.name === 'AbortError'){
-          msg.textContent = 'Condivisione annullata. Premi di nuovo “Genera PDF” quando vuoi.';
-          msg.className = 'msg';
+    // Rileva se siamo su un telefono/tablet
+    const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
+      || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1); // iPad che si dichiara Mac
+
+    // TELEFONO/TABLET: pannello di condivisione nativo (salva in File, invia via mail/WhatsApp)
+    if(isMobile){
+      const file = new File([blob], fileName, { type: 'application/pdf' });
+      if(navigator.canShare && navigator.canShare({ files: [file] })){
+        try{
+          await navigator.share({ files: [file], title: fileName });
+          msg.textContent = 'PDF pronto: salvalo o invialo a MST Group dal menu di condivisione.';
+          msg.className = 'msg ok';
           return;
+        }catch(shareErr){
+          if(shareErr && shareErr.name === 'AbortError'){
+            msg.textContent = 'Operazione annullata. Premi di nuovo “Genera PDF” quando vuoi.';
+            msg.className = 'msg';
+            return;
+          }
+          // se la condivisione fallisce per altro motivo, cade nel download qui sotto
         }
-        // Altro errore: prosegui col fallback download qui sotto
       }
     }
 
-    // 2) Fallback universale (desktop e mobile senza condivisione file): download reale del file
-    //    tramite un link <a download>, che NON ricarica la pagina.
+    // COMPUTER (o telefono senza condivisione): download diretto nella cartella Download
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
